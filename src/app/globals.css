@@ -52,4 +52,34 @@
   }
   .animate-pixel-think { animation: pixel-think 1.2s ease-in-out infinite; }
   .animate-pixel-type  { animation: pixel-type 0.25s linear infinite; }
+
+  /* 워킹 사이클: 두 프레임을 교대로 전환 */
+  @keyframes walk-frame-a {
+    0%, 49.9% { opacity: 1; }
+    50%, 100%  { opacity: 0; }
+  }
+  @keyframes walk-frame-b {
+    0%, 49.9% { opacity: 0; }
+    50%, 100%  { opacity: 1; }
+  }
+  .animate-walk-a { animation: walk-frame-a 0.35s steps(1) infinite; }
+  .animate-walk-b { animation: walk-frame-b 0.35s steps(1) infinite; }
+
+  /* 유휴 숨쉬기 */
+  @keyframes idle-breathe {
+    0%, 100% { transform: translateY(0px); }
+    45%, 55%  { transform: translateY(-1px); }
+  }
+  .animate-idle-breathe { animation: idle-breathe 3.5s ease-in-out infinite; }
+
+  /* 업무 완료 축하 점프 */
+  @keyframes celebrate {
+    0%   { transform: translateY(0px); }
+    20%  { transform: translateY(-7px); }
+    40%  { transform: translateY(0px); }
+    60%  { transform: translateY(-4px); }
+    80%  { transform: translateY(0px); }
+    100% { transform: translateY(0px); }
+  }
+  .animate-celebrate { animation: celebrate 0.75s ease-out forwards; }
 }

@@ -8,6 +8,7 @@ interface Agent {
   name: string
   role: AgentRole
   isPlanner: boolean
+  deskPosition: number
 }
 
 interface DeskSlotProps {
@@ -15,12 +16,23 @@ interface DeskSlotProps {
   animationState?: AnimationState
   isActive: boolean
   isEmpty?: boolean
+  isWalking?: boolean     // true이면 sprite 숨김 (오버레이에서 이동 중)
+  celebrate?: boolean
   onClick: () => void
 }
 
-export default function DeskSlot({ agent, animationState = 'idle', isActive, isEmpty, onClick }: DeskSlotProps) {
+export default function DeskSlot({
+  agent,
+  animationState = 'idle',
+  isActive,
+  isEmpty,
+  isWalking = false,
+  celebrate = false,
+  onClick,
+}: DeskSlotProps) {
   const roleLabel = agent ? (OFFICE_ROLES.find(r => r.id === agent.role)?.label ?? agent.role) : null
   const colors = agent ? ROLE_COLORS[agent.role] : null
+  const breatheDelay = (agent?.deskPosition ?? 0) * 400
 
   return (
     <div
@@ -63,10 +75,19 @@ export default function DeskSlot({ agent, animationState = 'idle', isActive, isE
             style={{ backgroundColor: '#ccccdd' }} />
         )}
 
-        {/* 스프라이트 (데스크 위) */}
+        {/* 스프라이트: isWalking이면 visibility:hidden으로 자리만 유지 */}
         {agent && (
-          <div className="absolute -top-10 left-1/2 -translate-x-1/2">
-            <AgentSprite role={agent.role} animationState={animationState} scale={2} />
+          <div
+            className="absolute -top-10 left-1/2 -translate-x-1/2"
+            style={{ visibility: isWalking ? 'hidden' : 'visible' }}
+          >
+            <AgentSprite
+              role={agent.role}
+              animationState={animationState}
+              scale={2}
+              breatheDelay={breatheDelay}
+              celebrate={celebrate}
+            />
           </div>
         )}
       </div>

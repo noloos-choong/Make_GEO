@@ -14,7 +14,7 @@ export default function OfficeView() {
   const log = useActivityLog()
   const {
     agents, addAgent, updateAgent, removeAgent,
-    workflow, status, activeAgentId,
+    workflow, status, activeAgentId, walking,
     submitTask, resetWorkflow,
   } = useOffice(log)
 
@@ -104,6 +104,8 @@ export default function OfficeView() {
           <OfficeScene
             agents={agents}
             activeAgentId={activeAgentId}
+            walking={walking}
+            celebrating={status === 'done'}
             maxDesks={6}
             onDeskClick={handleDeskClick}
           />

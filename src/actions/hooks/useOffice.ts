@@ -45,6 +45,14 @@ export interface Workflow {
   createdAt: number
 }
 
+export interface WalkingState {
+  agentId: string
+  role: AgentRole
+  fromPosition: number
+  toPosition: number
+  direction: 'left' | 'right'
+}
+
 interface LogCallbacks {
   appendEntry: (entry: { kind: LogEntryKind; agentName: string | null; agentRole: AgentRole | null; text: string; isStreaming: boolean }) => string
   appendDelta: (id: string, delta: string) => void
@@ -56,11 +64,18 @@ function genId() {
   return Math.random().toString(36).slice(2, 10)
 }
 
+function delay(ms: number) {
+  return new Promise<void>(r => setTimeout(r, ms))
+}
+
+const WALK_DURATION = 1600  // ms — WalkingCharacter transition(1.4s)보다 약간 길게
+
 export function useOffice(log: LogCallbacks) {
   const [agents, setAgents] = useState<Agent[]>([])
   const [workflow, setWorkflow] = useState<Workflow | null>(null)
   const [status, setStatus] = useState<WorkflowStatus>('idle')
   const [activeAgentId, setActiveAgentId] = useState<string | null>(null)
+  const [walking, setWalking] = useState<WalkingState | null>(null)
 
   // 초기 로드
   useEffect(() => {
@@ -76,8 +91,7 @@ export function useOffice(log: LogCallbacks) {
   // --- Agent CRUD ---
 
   const addAgent = useCallback((agent: Omit<Agent, 'id'>) => {
-    const newAgent: Agent = { ...agent, id: genId() }
-    setAgents(prev => [...prev, newAgent])
+    setAgents(prev => [...prev, { ...agent, id: genId() }])
   }, [])
 
   const updateAgent = useCallback((id: string, patch: Partial<Agent>) => {
@@ -90,22 +104,13 @@ export function useOffice(log: LogCallbacks) {
 
   // --- Workflow ---
 
-  const updateStep = useCallback((stepId: string, patch: Partial<WorkflowStep>) => {
-    setWorkflow(prev => prev && {
-      ...prev,
-      steps: prev.steps.map(s => s.id === stepId ? { ...s, ...patch } : s),
-    })
-  }, [])
-
   const executeNextStep = useCallback(async (currentWorkflow: Workflow, currentAgents: Agent[]) => {
-    // 완료되지 않은 의존성이 있는 스텝 제외
     const doneIds = new Set(currentWorkflow.steps.filter(s => s.status === 'done').map(s => s.id))
     const next = currentWorkflow.steps.find(
       s => s.status === 'pending' && s.dependsOn.every(dep => doneIds.has(dep))
     )
 
     if (!next) {
-      // 모든 스텝 완료 또는 실행 가능한 스텝 없음
       const allDone = currentWorkflow.steps.every(s => s.status === 'done' || s.status === 'error')
       if (allDone) {
         setStatus('done')
@@ -117,13 +122,19 @@ export function useOffice(log: LogCallbacks) {
 
     const agent = currentAgents.find(a => a.id === next.agentId)
     if (!agent) {
-      updateStep(next.id, { status: 'error', output: '에이전트를 찾을 수 없습니다.' })
+      setWorkflow(prev => prev && {
+        ...prev,
+        steps: prev.steps.map(s => s.id === next.id ? { ...s, status: 'error' as const, output: '에이전트를 찾을 수 없습니다.' } : s),
+      })
       log.appendEntry({ kind: 'error', agentName: null, agentRole: null, text: `⚠️ 스텝 "${next.description}"에 배정된 에이전트를 찾을 수 없습니다.`, isStreaming: false })
       return
     }
 
     // 스텝 시작
-    updateStep(next.id, { status: 'running', startedAt: Date.now() })
+    setWorkflow(prev => prev && {
+      ...prev,
+      steps: prev.steps.map(s => s.id === next.id ? { ...s, status: 'running' as const, startedAt: Date.now() } : s),
+    })
     setActiveAgentId(agent.id)
 
     const previousOutputs: Record<string, string> = {}
@@ -146,33 +157,59 @@ export function useOffice(log: LogCallbacks) {
       for await (const delta of gen) {
         output += delta
         log.appendDelta(entryId, delta)
-        updateStep(next.id, { output })
       }
       log.markStreamDone(entryId)
-      updateStep(next.id, { status: 'done', output, finishedAt: Date.now() })
-      log.appendEntry({ kind: 'step_done', agentName: agent.name, agentRole: agent.role, text: `✓ "${next.description}" 완료`, isStreaming: false })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       log.markStreamDone(entryId)
-      updateStep(next.id, { status: 'error', output: msg, finishedAt: Date.now() })
+      setWorkflow(prev => prev && {
+        ...prev,
+        steps: prev.steps.map(s => s.id === next.id ? { ...s, status: 'error' as const, output: msg, finishedAt: Date.now() } : s),
+      })
       log.appendEntry({ kind: 'error', agentName: agent.name, agentRole: agent.role, text: `❌ 오류: ${msg}`, isStreaming: false })
       setStatus('error')
       setActiveAgentId(null)
       return
     }
 
-    // 다음 스텝 실행
-    setWorkflow(prev => {
-      if (!prev) return prev
-      const updated: Workflow = {
-        ...prev,
-        steps: prev.steps.map(s => s.id === next.id ? { ...s, status: 'done', output, finishedAt: Date.now() } : s),
+    // 스텝 완료 처리
+    const updatedSteps = currentWorkflow.steps.map(s =>
+      s.id === next.id ? { ...s, status: 'done' as const, output, finishedAt: Date.now() } : s
+    )
+    const updatedWorkflow: Workflow = { ...currentWorkflow, steps: updatedSteps }
+    setWorkflow(updatedWorkflow)
+    log.appendEntry({ kind: 'step_done', agentName: agent.name, agentRole: agent.role, text: `✓ "${next.description}" 완료`, isStreaming: false })
+
+    // 다음 실행 가능 스텝 확인
+    const nextDoneIds = new Set(updatedSteps.filter(s => s.status === 'done').map(s => s.id))
+    const nextStep = updatedSteps.find(
+      s => s.status === 'pending' && s.dependsOn.every(dep => nextDoneIds.has(dep))
+    )
+
+    if (nextStep) {
+      const nextAgent = currentAgents.find(a => a.id === nextStep.agentId)
+      // 다른 에이전트에게 업무 이동 시 걷기 애니메이션
+      if (nextAgent && nextAgent.id !== agent.id) {
+        const fromCol = agent.deskPosition % 3
+        const toCol   = nextAgent.deskPosition % 3
+        const dir: 'left' | 'right' = toCol >= fromCol ? 'right' : 'left'
+        setActiveAgentId(null)
+        setWalking({
+          agentId:      agent.id,
+          role:         agent.role,
+          fromPosition: agent.deskPosition,
+          toPosition:   nextAgent.deskPosition,
+          direction:    dir,
+        })
+        await delay(WALK_DURATION)
+        setWalking(null)
+        await delay(150)
       }
-      // 비동기 실행은 setTimeout으로 defer (React state batch 이후)
-      setTimeout(() => executeNextStep(updated, currentAgents), 100)
-      return updated
-    })
-  }, [log, updateStep])
+    }
+
+    // 다음 스텝 실행
+    setTimeout(() => executeNextStep(updatedWorkflow, currentAgents), 50)
+  }, [log])
 
   const submitTask = useCallback(async (taskDescription: string) => {
     if (status !== 'idle') return
@@ -210,7 +247,7 @@ export function useOffice(log: LogCallbacks) {
       createdAt: Date.now(),
       steps: planResponse.steps.map(s => ({
         ...s,
-        status: 'pending',
+        status: 'pending' as const,
         output: '',
         startedAt: null,
         finishedAt: null,
@@ -234,12 +271,13 @@ export function useOffice(log: LogCallbacks) {
     setWorkflow(null)
     setStatus('idle')
     setActiveAgentId(null)
+    setWalking(null)
     log.clearLog()
   }, [log])
 
   return {
     agents, addAgent, updateAgent, removeAgent,
-    workflow, status, activeAgentId,
+    workflow, status, activeAgentId, walking,
     submitTask, resetWorkflow,
   }
 }

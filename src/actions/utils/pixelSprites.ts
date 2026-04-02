@@ -1,5 +1,5 @@
 export type AgentRole = 'planner' | 'developer' | 'designer' | 'writer' | 'analyst' | 'manager'
-export type AnimationState = 'idle' | 'thinking' | 'typing'
+export type AnimationState = 'idle' | 'thinking' | 'typing' | 'walking'
 
 // CSS box-shadow 픽셀 아트: [x, y, color] 튜플 배열
 // 16×16 grid, scale=2 → 32×32px
@@ -49,27 +49,15 @@ function bodyPixels(shirtColor: string, hairColor: string, skinColor = '#fde8c8'
   ]
 }
 
-// 노트북 (개발자, 분석가)
-const laptopPixels: Pixel[] = [
-  [4,11,'#aab'],[5,11,'#aab'],[6,11,'#aab'],[7,11,'#aab'],[8,11,'#ccddee'],[9,11,'#ccddee'],
-  [4,12,'#889'],[5,12,'#889'],[6,12,'#889'],[7,12,'#889'],
-]
-
-// 연필 (작가)
-const pencilPixels: Pixel[] = [
-  [11,8,'#f5c518'],[11,9,'#f5c518'],[11,10,'#f5c518'],[11,11,'#ffeeaa'],
-  [11,12,'#f5c518'],[11,13,'#e07030'],
-]
-
 // 역할별 스프라이트 데이터 생성
 function makeSpriteData(role: AgentRole) {
   const configs: Record<AgentRole, { shirt: string; hair: string }> = {
-    planner:   { shirt: '#1e40af', hair: '#3d2b1f' }, // navy + dark brown
-    developer: { shirt: '#065f46', hair: '#1a1a2e' }, // dark green + black
-    designer:  { shirt: '#7c3aed', hair: '#8b1a4a' }, // purple + dark pink
-    writer:    { shirt: '#92400e', hair: '#704214' }, // brown + darker brown
-    analyst:   { shirt: '#0369a1', hair: '#2d3a4a' }, // blue + dark slate
-    manager:   { shirt: '#991b1b', hair: '#2c1810' }, // dark red + dark brown
+    planner:   { shirt: '#1e40af', hair: '#3d2b1f' },
+    developer: { shirt: '#065f46', hair: '#1a1a2e' },
+    designer:  { shirt: '#7c3aed', hair: '#8b1a4a' },
+    writer:    { shirt: '#92400e', hair: '#704214' },
+    analyst:   { shirt: '#0369a1', hair: '#2d3a4a' },
+    manager:   { shirt: '#991b1b', hair: '#2c1810' },
   }
   const { shirt, hair } = configs[role]
   return bodyPixels(shirt, hair)
@@ -79,41 +67,105 @@ export interface SpriteRenderData {
   idle: string
   thinking: string
   typing: string
+  walk1: string
+  walk2: string
 }
 
 function buildRoleSprites(role: AgentRole): SpriteRenderData {
   const base = makeSpriteData(role)
+  const skin = '#fde8c8'
+  const pants = '#555577'
+  const shoe = '#333344'
 
-  // thinking: 눈이 위를 봄 (눈 위치 변경)
+  // --- thinking: 눈이 위를 봄 ---
   const thinkingBase = base.filter(([x, y]) => !(x === 6 && y === 4) && !(x === 9 && y === 4))
   const thinkingEyes: Pixel[] = [[6, 3, '#3a2d2d'], [9, 3, '#3a2d2d']]
   const thinking = [...thinkingBase, ...thinkingEyes]
 
-  // typing: 팔이 앞으로 (y+1 이동)
+  // --- typing: 팔이 앞으로 ---
   const typingBase = base.filter(([x]) => x !== 3 && x !== 12)
   const typingArms: Pixel[] = [
-    [3, 8, '#fde8c8'], [3, 9, '#fde8c8'], [3, 10, '#fde8c8'],
-    [12, 8, '#fde8c8'], [12, 9, '#fde8c8'], [12, 10, '#fde8c8'],
+    [3, 8, skin], [3, 9, skin], [3, 10, skin],
+    [12, 8, skin], [12, 9, skin], [12, 10, skin],
     [4, 11, '#aab'], [5, 11, '#aab'], [6, 11, '#aab'],
     [7, 11, '#aab'], [8, 11, '#aab'], [9, 11, '#aab'],
   ]
   const typing = [...typingBase, ...typingArms]
 
+  // --- walk frame 공통: 하체/발 제거 후 새 다리 추가 ---
+  const upperBody = base.filter(([, y]) => y <= 11)
+
+  // walk1: 왼발 앞(+1px forward), 오른발 뒤(-1px), 팔 swing (왼팔 앞)
+  const walk1Legs: Pixel[] = [
+    // 왼쪽 다리 (앞으로)
+    [5, 12, pants], [6, 12, pants],
+    [4, 13, pants], [5, 13, pants],
+    [4, 14, shoe],  [5, 14, shoe],
+    // 오른쪽 다리 (뒤로)
+    [8, 12, pants], [9, 12, pants],
+    [9, 13, pants], [10, 13, pants],
+    [9, 14, shoe],  [10, 14, shoe],
+  ]
+  const walk1Arms: Pixel[] = [
+    // 왼팔 앞으로 swing
+    [2, 7, skin], [2, 8, skin], [2, 9, skin], [2, 10, skin],
+    // 오른팔 뒤로
+    [13, 8, skin], [13, 9, skin], [13, 10, skin], [13, 11, skin],
+  ]
+  const walk1Base = upperBody.filter(([x]) => x !== 3 && x !== 12 && x !== 2 && x !== 13)
+  const walk1 = [...walk1Base, ...walk1Legs, ...walk1Arms]
+
+  // walk2: 오른발 앞(+1px forward), 왼발 뒤(-1px), 팔 swing (오른팔 앞)
+  const walk2Legs: Pixel[] = [
+    // 왼쪽 다리 (뒤로)
+    [5, 12, pants], [6, 12, pants],
+    [4, 13, pants], [5, 13, pants],
+    [4, 14, shoe],  [5, 14, shoe],
+    // 오른쪽 다리 (앞으로)
+    [8, 12, pants], [9, 12, pants],
+    [9, 13, pants], [10, 13, pants],
+    [9, 14, shoe],  [10, 14, shoe],
+  ]
+  const walk2Arms: Pixel[] = [
+    // 왼팔 뒤로 swing
+    [2, 8, skin], [2, 9, skin], [2, 10, skin], [2, 11, skin],
+    // 오른팔 앞으로
+    [13, 7, skin], [13, 8, skin], [13, 9, skin], [13, 10, skin],
+  ]
+  // walk2: 몸통이 1px 위 (걸을 때 중심 이동)
+  const walk2Base = upperBody
+    .filter(([x]) => x !== 3 && x !== 12 && x !== 2 && x !== 13)
+    .map(([x, y, c]): Pixel => [x, y - 1, c])
+  const walk2 = [...walk2Base, ...walk2Legs, ...walk2Arms]
+
   return {
     idle:     buildShadow(base),
     thinking: buildShadow(thinking),
     typing:   buildShadow(typing),
+    walk1:    buildShadow(walk1),
+    walk2:    buildShadow(walk2),
   }
 }
 
 // 전체 6 역할 스프라이트 캐시
 const SPRITE_CACHE: Partial<Record<AgentRole, SpriteRenderData>> = {}
 
-export function getSprite(role: AgentRole, state: AnimationState): string {
+function ensureCache(role: AgentRole): SpriteRenderData {
   if (!SPRITE_CACHE[role]) {
     SPRITE_CACHE[role] = buildRoleSprites(role)
   }
-  return SPRITE_CACHE[role]![state]
+  return SPRITE_CACHE[role]!
+}
+
+export function getSprite(role: AgentRole, state: AnimationState): string {
+  const data = ensureCache(role)
+  if (state === 'walking') return data.walk1
+  return data[state]
+}
+
+export function getWalkFrames(role: AgentRole): { walk1: string; walk2: string } {
+  const data = ensureCache(role)
+  return { walk1: data.walk1, walk2: data.walk2 }
 }
 
 export const ROLES: AgentRole[] = ['planner', 'developer', 'designer', 'writer', 'analyst', 'manager']
