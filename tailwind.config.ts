@@ -17,6 +17,12 @@ const config: Config = {
           600: '#3b57e8',
           700: '#2d44cc',
         },
+        office: {
+          floor:        '#f0ebe0',
+          wall:         '#d4c9b8',
+          desk:         '#8b6914',
+          'desk-shadow':'#6b4f10',
+        },
       },
     },
   },

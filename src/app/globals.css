@@ -39,3 +39,17 @@
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
   }
 }
+
+@layer utilities {
+  @keyframes pixel-think {
+    0%, 100% { opacity: 1; transform: translateY(0); }
+    50%       { opacity: 0.7; transform: translateY(-1px); }
+  }
+  @keyframes pixel-type {
+    0%, 100% { transform: translateY(0); }
+    25%      { transform: translateY(-2px); }
+    75%      { transform: translateY(1px); }
+  }
+  .animate-pixel-think { animation: pixel-think 1.2s ease-in-out infinite; }
+  .animate-pixel-type  { animation: pixel-type 0.25s linear infinite; }
+}

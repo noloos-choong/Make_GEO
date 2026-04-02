@@ -8,6 +8,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/content': '콘텐츠 편집',
   '/reports': '리포트',
   '/settings': '설정',
+  '/office': 'AI 오피스',
 }
 
 export default function Header() {
