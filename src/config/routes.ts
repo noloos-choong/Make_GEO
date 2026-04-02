@@ -4,4 +4,5 @@ export const ROUTES = {
   CONTENT: '/content',
   REPORTS: '/reports',
   SETTINGS: '/settings',
+  OFFICE: '/office',
 } as const
