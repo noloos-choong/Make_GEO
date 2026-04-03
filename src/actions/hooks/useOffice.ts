@@ -13,7 +13,7 @@ export type WorkflowStatus = 'idle' | 'planning' | 'running' | 'done' | 'error'
 export interface LLMConfig {
   provider: LLMProvider
   model: string
-  apiKey: string
+  // API 키는 HttpOnly 쿠키에 서버사이드로 저장됩니다 (클라이언트 노출 없음)
 }
 
 export interface Agent {
@@ -231,7 +231,8 @@ export function useOffice(log: LogCallbacks) {
       planResponse = await planTask({
         taskDescription,
         agents: agents.map(a => ({ id: a.id, name: a.name, role: a.role, personality: a.personality })),
-        plannerLLMConfig: planner.llmConfig,
+        plannerProvider: planner.llmConfig.provider,
+        plannerModel:    planner.llmConfig.model,
       })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)

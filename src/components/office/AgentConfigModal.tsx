@@ -9,18 +9,19 @@ import type { AgentRole } from '@/actions/utils/pixelSprites'
 
 interface AgentConfigModalProps {
   open: boolean
-  agent: Agent | null     // null = 새 에이전트 추가
+  agent: Agent | null
   existingPositions: number[]
   hasPlannerAlready: boolean
+  apiKeyStatus: { anthropic: boolean; openrouter: boolean }
   onSave: (agent: Omit<Agent, 'id'> & { id?: string }) => void
   onDelete: (id: string) => void
   onClose: () => void
 }
 
-const EMPTY_LLM: LLMConfig = { provider: 'anthropic', model: DEFAULT_MODELS.anthropic, apiKey: '' }
+const EMPTY_LLM: LLMConfig = { provider: 'anthropic', model: DEFAULT_MODELS.anthropic }
 
 export default function AgentConfigModal({
-  open, agent, existingPositions, hasPlannerAlready, onSave, onDelete, onClose,
+  open, agent, existingPositions, hasPlannerAlready, apiKeyStatus, onSave, onDelete, onClose,
 }: AgentConfigModalProps) {
   const [name, setName] = useState('')
   const [role, setRole] = useState<AgentRole>('developer')
@@ -52,7 +53,6 @@ export default function AgentConfigModal({
 
   function handleSave() {
     if (!name.trim()) return
-    // 빈 데스크 위치 찾기
     const usedPositions = new Set(existingPositions)
     let deskPosition = agent?.deskPosition ?? -1
     if (deskPosition === -1) {
@@ -75,10 +75,10 @@ export default function AgentConfigModal({
   }
 
   const isNewPlanner = role === 'planner' && (!agent || !agent.isPlanner) && hasPlannerAlready
+  const selectedProviderHasKey = apiKeyStatus[llmConfig.provider]
 
   return (
     <>
-      {/* 오버레이 */}
       <div
         className={clsx(
           'fixed inset-0 bg-black/40 z-40 transition-opacity duration-300',
@@ -86,8 +86,6 @@ export default function AgentConfigModal({
         )}
         onClick={onClose}
       />
-
-      {/* 슬라이드 패널 */}
       <div
         className={clsx(
           'fixed top-0 right-0 h-full w-96 bg-white shadow-2xl z-50 flex flex-col transition-transform duration-300',
@@ -108,20 +106,14 @@ export default function AgentConfigModal({
 
         {/* 폼 */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {/* 이름 */}
           <div>
             <label className="label">에이전트 이름</label>
             <input className="input" value={name} onChange={e => setName(e.target.value)} placeholder="예: 개발자 철수" />
           </div>
 
-          {/* 역할 */}
           <div>
             <label className="label">역할</label>
-            <select
-              className="input"
-              value={role}
-              onChange={e => setRole(e.target.value as AgentRole)}
-            >
+            <select className="input" value={role} onChange={e => setRole(e.target.value as AgentRole)}>
               {OFFICE_ROLES.map(r => (
                 <option key={r.id} value={r.id}>{r.emoji} {r.label}</option>
               ))}
@@ -131,7 +123,6 @@ export default function AgentConfigModal({
             )}
           </div>
 
-          {/* 퍼스널리티 */}
           <div>
             <label className="label">퍼스널리티 설명</label>
             <textarea
@@ -143,7 +134,6 @@ export default function AgentConfigModal({
             />
           </div>
 
-          {/* LLM 제공자 */}
           <div>
             <label className="label">LLM 제공자</label>
             <select
@@ -155,9 +145,18 @@ export default function AgentConfigModal({
                 <option key={p.id} value={p.id}>{p.label}</option>
               ))}
             </select>
+            {/* API 키 상태 표시 */}
+            <div className={clsx(
+              'mt-1.5 flex items-center gap-1.5 text-xs',
+              selectedProviderHasKey ? 'text-emerald-600' : 'text-amber-600',
+            )}>
+              <span>{selectedProviderHasKey ? '✓' : '⚠'}</span>
+              {selectedProviderHasKey
+                ? 'API 키 등록됨'
+                : 'API 키 미설정 — 설정 패널에서 등록해주세요'}
+            </div>
           </div>
 
-          {/* 모델 */}
           <div>
             <label className="label">모델</label>
             <input
@@ -168,20 +167,7 @@ export default function AgentConfigModal({
             />
           </div>
 
-          {/* API 키 */}
-          <div>
-            <label className="label">API 키</label>
-            <input
-              className="input font-mono text-xs"
-              type="password"
-              value={llmConfig.apiKey}
-              onChange={e => setLlmConfig(prev => ({ ...prev, apiKey: e.target.value }))}
-              placeholder={llmConfig.provider === 'anthropic' ? 'sk-ant-...' : 'sk-or-...'}
-            />
-            <p className="mt-1 text-xs text-gray-400">브라우저 로컬에만 저장됩니다.</p>
-          </div>
-
-          {/* 시스템 프롬프트 (접힘) */}
+          {/* 시스템 프롬프트 */}
           <div>
             <button
               type="button"
@@ -199,29 +185,20 @@ export default function AgentConfigModal({
               />
             )}
             <p className="mt-1 text-xs text-gray-400">
-              사용 가능한 변수: {'{{name}}'}, {'{{role}}'}, {'{{personality}}'}, {'{{task}}'}, {'{{step}}'}, {'{{context}}'}
+              변수: {'{{name}}'}, {'{{role}}'}, {'{{personality}}'}, {'{{task}}'}, {'{{step}}'}, {'{{context}}'}
             </p>
           </div>
         </div>
 
-        {/* 액션 버튼 */}
+        {/* 버튼 */}
         <div className="px-6 py-4 border-t border-gray-200 flex gap-2">
           {agent && (
-            <button
-              onClick={() => { onDelete(agent.id); onClose() }}
-              className="btn-secondary text-red-600 hover:bg-red-50"
-            >
+            <button onClick={() => { onDelete(agent.id); onClose() }} className="btn-secondary text-red-600 hover:bg-red-50">
               삭제
             </button>
           )}
           <button onClick={onClose} className="btn-secondary flex-1">취소</button>
-          <button
-            onClick={handleSave}
-            disabled={!name.trim()}
-            className="btn-primary flex-1"
-          >
-            저장
-          </button>
+          <button onClick={handleSave} disabled={!name.trim()} className="btn-primary flex-1">저장</button>
         </div>
       </div>
     </>
